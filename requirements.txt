@@ -1,0 +1,60 @@
+# Core Dependencies
+cryptography>=41.0.0
+paramiko>=3.3.0
+requests>=2.31.0
+psutil>=5.9.0
+colorama>=0.4.6
+sqlite3
+ipaddress
+dataclasses
+
+# Web Framework
+Flask>=2.3.0
+flask-socketio>=5.3.0
+python-socketio>=5.9.0
+eventlet>=0.33.0
+
+# Platform Bots
+discord.py>=2.3.0
+telethon>=1.34.0
+slack-sdk>=3.25.0
+selenium>=4.15.0
+webdriver-manager>=4.0.0
+
+# Networking & Security
+scapy>=2.5.0
+python-whois>=0.8.0
+qrcode>=7.4.0
+pyshorteners>=1.0.1
+
+# Utilities
+pyyaml>=6.0
+python-dotenv>=1.0.0
+toml>=0.10.0
+click>=8.1.0
+rich>=13.5.0
+tqdm>=4.66.0
+
+# Web Scraping
+beautifulsoup4>=4.12.0
+lxml>=4.9.0
+html5lib>=1.1
+
+# Database
+sqlalchemy>=2.0.0
+alembic>=1.12.0
+
+# Security Testing
+nikto-python>=0.1.0
+nmap-python>=1.0.0
+
+# Additional Tools
+pyOpenSSL>=23.2.0
+dnspython>=2.4.0
+pygments>=2.15.0
+tabulate>=0.9.0
+prettytable>=3.9.0
+
+# Monitoring
+prometheus-client>=0.19.0
+psutil>=5.9.0

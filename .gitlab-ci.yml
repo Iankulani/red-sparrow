@@ -1,0 +1,201 @@
+# RedSparrow v2.0.0 GitLab CI/CD Pipeline
+
+image: docker:latest
+
+services:
+  - docker:dind
+
+stages:
+  - lint
+  - test
+  - build
+  - security
+  - deploy
+
+variables:
+  DOCKER_IMAGE: $CI_REGISTRY_IMAGE
+  DOCKER_TAG: $CI_COMMIT_REF_SLUG
+  NPM_REGISTRY: https://registry.npmjs.org
+  PYPI_REPOSITORY: https://pypi.org/simple
+
+before_script:
+  - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+  - apk add --no-cache python3 py3-pip py3-virtualenv
+  - python3 -m venv /venv
+  - source /venv/bin/activate
+  - pip install --upgrade pip
+  - pip install -r requirements.txt
+
+# Lint Stage
+lint:
+  stage: lint
+  script:
+    - pip install black flake8 mypy pylint bandit
+    - black --check . || true
+    - flake8 --max-line-length=120 red_sparrow.py
+    - mypy --ignore-missing-imports red_sparrow.py
+    - pylint red_sparrow.py --fail-under=8.0 || true
+    - bandit -r . -ll -f json -o bandit-report.json || true
+  artifacts:
+    paths:
+      - bandit-report.json
+    expire_in: 7 days
+  only:
+    - main
+    - develop
+    - merge_requests
+
+# Unit Test Stage
+test:
+  stage: test
+  script:
+    - pip install pytest pytest-cov
+    - python3 -c "import red_sparrow; print('Module loaded successfully')"
+    - pytest tests/ --cov=red_sparrow --cov-report=html --cov-report=term
+  coverage: '/TOTAL.*\s+(\d+%)$/'
+  artifacts:
+    paths:
+      - htmlcov/
+      - coverage.xml
+    expire_in: 7 days
+  only:
+    - main
+    - develop
+    - merge_requests
+
+# Security Scanning
+security:
+  stage: security
+  script:
+    - pip install safety trivy-python
+    - safety check -r requirements.txt --json > safety-report.json || true
+    - trivy filesystem --no-progress --format json -o trivy-report.json . || true
+    - python3 -c "
+import json, sys
+with open('safety-report.json', 'r') as f:
+    data = json.load(f)
+    vulnerabilities = data.get('vulnerabilities', [])
+    if vulnerabilities:
+        print(f'Found {len(vulnerabilities)} vulnerabilities')
+        sys.exit(1)
+    print('No vulnerabilities found')
+"
+  artifacts:
+    paths:
+      - safety-report.json
+      - trivy-report.json
+    expire_in: 7 days
+  only:
+    - main
+    - develop
+
+# Build Docker Image
+build:
+  stage: build
+  script:
+    - echo "Building Docker image..."
+    - docker build --pull -t $DOCKER_IMAGE:$DOCKER_TAG .
+    - docker tag $DOCKER_IMAGE:$DOCKER_TAG $DOCKER_IMAGE:latest
+    - docker push $DOCKER_IMAGE:$DOCKER_TAG
+    - docker push $DOCKER_IMAGE:latest
+  artifacts:
+    paths:
+      - docker-image.tar
+    expire_in: 7 days
+  only:
+    - main
+    - develop
+  except:
+    - tags
+
+# Deploy to Staging
+deploy_staging:
+  stage: deploy
+  image: alpine:latest
+  script:
+    - apk add --no-cache openssh-client
+    - ssh -o StrictHostKeyChecking=no $STAGING_USER@$STAGING_HOST
+      "docker pull $DOCKER_IMAGE:$DOCKER_TAG
+      && docker stop redsparrow || true
+      && docker rm redsparrow || true
+      && docker run -d --name redsparrow --network host
+        -v /data/redsparrow:/app/.red_sparrow
+        -v /data/reports:/app/reports
+        $DOCKER_IMAGE:$DOCKER_TAG
+      && docker system prune -f"
+  environment:
+    name: staging
+    url: https://staging.redsparrow.local
+  only:
+    - develop
+  when: manual
+
+# Deploy to Production
+deploy_production:
+  stage: deploy
+  image: alpine:latest
+  script:
+    - apk add --no-cache openssh-client
+    - ssh -o StrictHostKeyChecking=no $PROD_USER@$PROD_HOST
+      "docker pull $DOCKER_IMAGE:$DOCKER_TAG
+      && docker-compose -f docker-compose.prod.yml up -d --force-recreate
+      && docker system prune -f"
+  environment:
+    name: production
+    url: https://redsparrow.local
+  only:
+    - main
+  when: manual
+
+# Rollback
+rollback:
+  stage: deploy
+  image: alpine:latest
+  script:
+    - apk add --no-cache openssh-client
+    - ssh -o StrictHostKeyChecking=no $PROD_USER@$PROD_HOST
+      "docker tag $DOCKER_IMAGE:previous $DOCKER_IMAGE:latest
+      && docker-compose -f docker-compose.prod.yml up -d --force-recreate"
+  environment:
+    name: production
+  only:
+    - main
+  when: manual
+
+# Create Release
+release:
+  stage: deploy
+  image: registry.gitlab.com/gitlab-org/release-cli:latest
+  script:
+    - echo "Creating release v2.0.0"
+  release:
+    name: "RedSparrow v2.0.0"
+    description: |
+      ## 🐦 RedSparrow v2.0.0 Release
+      
+      ### 🚀 New Features
+      - Full Nmap command support (500+ commands)
+      - Full Curl command support (300+ commands)
+      - Advanced IP spoofing (Nmap, hping3, Scapy, Curl, ARP)
+      - Custom phishing page generator
+      - QR code generation
+      - URL shortening
+      - Enhanced web UI
+      
+      ### 🔒 Security
+      - Improved threat detection
+      - IP management and blocking
+      - Firewall integration
+      
+      ### 🤖 Platform Support
+      - Discord, Telegram, Slack, WhatsApp, Signal, iMessage
+      
+    tag_name: "v2.0.0"
+    assets:
+      links:
+        - name: "Docker Image"
+          url: "$CI_REGISTRY_IMAGE:$DOCKER_TAG"
+        - name: "Documentation"
+          url: "https://docs.redsparrow.local"
+  only:
+    - tags

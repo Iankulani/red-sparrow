@@ -1,0 +1,108 @@
+version: '3.8'
+
+services:
+  redsparrow:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: redsparrow
+    hostname: redsparrow
+    restart: unless-stopped
+    privileged: true
+    network_mode: host
+    ports:
+      - "8080:8080"
+      - "8081:8081"
+      - "8443:8443"
+    volumes:
+      - ./data/.red_sparrow:/app/.red_sparrow
+      - ./data/reports:/app/reports
+      - ./data/phishing_pages:/app/phishing_pages
+      - ./data/captured_credentials:/app/captured_credentials
+      - ./data/ssh_keys:/app/ssh_keys
+      - ./data/nmap_results:/app/nmap_results
+      - ./data/curl_results:/app/curl_results
+      - ./data/spoof_logs:/app/spoof_logs
+      - ./data/web_ui:/app/web_ui
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - REDSPARROW_ENV=production
+      - LOG_LEVEL=INFO
+      - WEB_PORT=8080
+      - REDIS_URL=redis://redis:6379/0
+      - POSTGRES_URL=postgresql://redsparrow:redsparrow@postgres:5432/redsparrow
+    depends_on:
+      - redis
+      - postgres
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+      - SYS_ADMIN
+    security_opt:
+      - apparmor:unconfined
+    sysctls:
+      - net.ipv4.ip_forward=1
+      - net.ipv6.conf.all.forwarding=1
+    command: ["--web", "--bots", "--server"]
+
+  redis:
+    image: redis:7-alpine
+    container_name: redsparrow-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./data/redis:/data
+    command: redis-server --appendonly yes
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: redsparrow-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=redsparrow
+      - POSTGRES_PASSWORD=redsparrow
+      - POSTGRES_DB=redsparrow
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+
+  nginx:
+    image: nginx:alpine
+    container_name: redsparrow-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./web_static:/usr/share/nginx/html:ro
+    depends_on:
+      - redsparrow
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: redsparrow-prometheus
+    restart: unless-stopped
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./data/prometheus:/prometheus
+    ports:
+      - "9090:9090"
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: redsparrow-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data/grafana:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=redsparrow
+    depends_on:
+      - prometheus
