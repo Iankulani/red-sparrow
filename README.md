@@ -22,6 +22,7 @@ At its core, Red Sparrow offers unprecedented accessibility, enabling operators 
 The framework is built for the rigors of advanced operations. It supports dynamic payload generation, in-memory execution, and encrypted channel hopping to ensure persistence even when individual tokens are revoked. For the ethical red teamer (the "White Hat"), Red Sparrow provides a robust platform to test an organization's detection capabilities against non-standard C2 channels. For the advanced operator (the "Red Hat"), it offers deep customization and obfuscation. However, Red Sparrow operates as a double-edged sword; its distributed nature and encryption make it highly resilient to takedown. The tool’s architecture encourages responsible usage, featuring built-in geofencing and session timeouts to prevent accidental misuse.
 
 
+
 # How to clone the repo
 ```bash
 git clone https://github.com/Iankulani/red-sparrow.git
