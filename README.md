@@ -35,3 +35,5 @@ python red-sparrow.py
 ```
  
 # Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=Iankulani/red-sparrow&type=Date)](https://star-history.com/#Iankulani/red-sparrow&Date)
